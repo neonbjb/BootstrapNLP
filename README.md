@@ -39,7 +39,7 @@ processors/sentiment.py for an example.
 ## Future Changes
 I have a few focuses for this project at the moment:
 1) Move from tensorflow serving to a model serving framework that supports pytorch
-as well as tensorflow.
+as well as tensorflow. I'm looking closely at RedisAI for this right now.
 2) Retool HTML page to use Angular or React rather than a custom data binding
 script.
 3) Add additional input and output types as needed.
