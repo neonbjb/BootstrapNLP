@@ -1,0 +1,52 @@
+models:
+  sentiment:
+    # The name of the model, which shows up in a heading on the website.
+    name: "Sentiment Analysis"
+
+    # A textual description of the model which shows up on the website.
+    description: "This model predicts the star rating of a block of review text."
+
+    # The URL of the tensorflow model server where the model resides.
+    serving_url: "192.168.56.101:8500"
+
+    # The spec name that tensorflow-serving uses to address the model. This is generally specified when you start up
+    # tensorflow-serving.
+    model_spec_name: "gpt2"
+
+    # A python module which contains the input and output processors.
+    #  Modules must exist in the CWD or a sub-directory. Use python module format, e.g. "module.separated.by.periods"
+    #   for module contained in module/separated/by/periods.py
+    data_processing_script: "processors.sentiment"
+
+    # Dictionary of input specifications. Expect these inputs to be compiled into a dict and fed into the process_inputs
+    # function of the data_processing_script specified above.
+    inputs:
+
+      review:
+        # A display name used to annotate the inputs on the webpage.
+        display_name: "Review"
+
+        # Type of input. Used to render UI. Currently accepted types: [
+        #   "string" - For "normal" strings which aren't expected to be very long.
+        #   "longstring" - For long-form strings where providing the user with a full text box makes more sense.
+        # ]
+        type: "longstring"
+
+    # Dictionary of output specifications. The website expects this dictionary as a product of your process_outputs
+    # function from the data_processing_script and will render the website accordingly.
+    outputs:
+
+      star_rating:
+        # A display name used to annotate the output."
+        display_name: "Anticipated review rating (out of 5 stars)"
+
+        # Type of output. Used to render UI. Currently accepted types: [
+        #   "string" - Renders output as a string. Must be a string or primitive (integer, float, etc).
+        # ]
+        type: "string"
+
+# Where the static webpages that get served to the user reside.
+static_files_dir: "static"
+
+# Time in seconds before a request to the tensorflow serving model server times out and fails.
+model_server_timeout_secs: 5

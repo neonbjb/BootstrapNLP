@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+
+    <title>Interactive Model Zoo</title>
+</head>
+<body style="font-family:Roboto">
+<div class="container-fluid">
+    <div class="p-2 row justify-content-center">
+        <div class="p-3 w-75">
+            <h1>Trained Model Demo Site</h1>
+        </div>
+    </div>
+    <div class="p-2 row justify-content-center">
+        <div class="p-3 w-75">
+            This page contains ways to interact with various models trained and deployed by this computer. Interact with
+            your model by filling in the inputs in one of the sections below and hitting "infer".
+        </div>
+    </div>
+
+    <div class="p-2 row justify-content-center" id="model_div">
+
+    </div>
+</div>
+
+<!-- Optional JavaScript -->
+<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+<script src="js/jquery-3.4.1.min.js"></script>
+<script src="js/popper.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script>
+    class ModelProcessor {
+        constructor() {
+            this.models = {};
+        }
+
+        build_model_list(_div_element_to_place_models) {
+            let class_mods = this.models;
+            $.ajax({
+                type: 'get',
+                url: '/lm',
+                dataType: 'json',
+                data: '',
+                success: function (models) {
+                    let markup = "";
+                    Object.keys(models).forEach(key => {
+                        class_mods[key] = new Model(key, models[key]);
+                        markup += class_mods[key].build_model_markup();
+                    });
+                    _div_element_to_place_models.innerHTML = markup;
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                    _div_element_to_place_models.innerHTML = "<h3>Error loading models.</h3><br>" + errorThrown;
+                }
+            });
+        }
+
+        infer(model_id) {
+            let model = this.models[model_id];
+            let inputs = model.collect_inputs();
+            inputs.model_id = model_id;
+            $.ajax({
+                type: 'post',
+                url: '/predict',
+                contentType: 'application/json',
+                dataType: 'json',
+                data: JSON.stringify(inputs),
+                success: function (data) {
+                    if(data.success) {
+                        model.push_to_outputs(data.outputs);
+                    } else {
+                        model.push_error_to_outputs(data.error);
+                    }
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                    model.push_error_to_outputs(errorThrown);
+                }
+            });
+        }
+    }
+
+    class Model {
+        constructor(model_id, model) {
+            this.model_id = model_id;
+            this.model = model;
+        }
+
+        get_input_id(input_id) {
+            return "_input_" + this.model_id + "_" + input_id;
+        }
+
+        get_output_id(output_id) {
+            return "_output_" + this.model_id + "_" + output_id;
+        }
+
+        build_input_markup_from_type(input_id, type) {
+            const id = this.get_input_id(input_id);
+            switch(type) {
+                case 'string':
+                    return `<input class="form-control" id="${id}">`;
+                case 'longstring':
+                    return `<textarea class="form-control" id="${id}"></textarea>`;
+            }
+        }
+
+        build_output_markup_from_type(output_id, type) {
+            const id = this.get_output_id(output_id);
+            switch(type) {
+                case 'string':
+                    return `<div class="alert alert-primary" role="alert" id="${id}"></div>`;
+                default:
+                    return `<div id="${id}">Unknown output: ${type}</div>`;
+            }
+        }
+
+        build_input_markup(input_id, input) {
+            return `
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">${input.display_name}:</span>
+                </div>
+                ${ this.build_input_markup_from_type(input_id, input.type) }
+            </div>`;
+        }
+
+        build_output_markup(output_id, output) {
+            return `
+            <div class="p-4">
+              ${ output.display_name }: ${ this.build_output_markup_from_type(output_id, output.type) }
+            </div>`;
+        }
+
+        build_model_markup() {
+            return `
+            <div class="p-3 w-75 border rounded">
+                <h2>${this.model.name}</h2>
+                ${this.model.description}
+                ${Object.keys(this.model.inputs).map(k => this.build_input_markup(k, this.model.inputs[k])).join('')}
+                <button class="btn btn-primary btn-block" type="button"
+                        onclick="processor.infer('${this.model_id}');">Infer
+                </button>
+                ${Object.keys(this.model.outputs).map(k => this.build_output_markup(k, this.model.outputs[k])).join('')}
+            </div>
+            `;
+        }
+
+        get_input_obj_from_type(input_id, type) {
+            switch(type) {
+                case "string":
+                case "longstring":
+                    return document.getElementById(input_id).value;
+                default:
+                    throw "get_input_obj_from_type: unrecognized type.";
+            }
+        }
+
+        collect_inputs() {
+            let collected = {};
+            Object.keys(this.model.inputs).forEach(k => {
+                let input = this.model.inputs[k];
+                collected[k] = this.get_input_obj_from_type(this.get_input_id(k), input.type);
+            });
+            return collected;
+        }
+
+        apply_output_obj_to_element(output_id, type, obj_to_apply)  {
+            switch(type) {
+                case "string":
+                    document.getElementById(output_id).innerHTML = obj_to_apply;
+                    break;
+                default:
+                    document.getElementById(output_id).innerHTML = "Unrecognized output type.";
+                    break;
+            }
+        }
+
+        push_to_outputs(output_obj) {
+            Object.keys(this.model.outputs).forEach(k => {
+                let output = this.model.outputs[k];
+                this.apply_output_obj_to_element(this.get_output_id(k), output.type, output_obj[k]);
+            });
+        }
+
+        push_error_to_outputs(error_message) {
+            Object.keys(this.model.outputs).forEach(k => {
+                // Just apply the error to every output.
+                document.getElementById(this.get_output_id(k)).innerHTML = error_message;
+            });
+        }
+    }
+
+    const processor = new ModelProcessor();
+    processor.build_model_list(model_div);
+</script>
+</body>
+</html>
